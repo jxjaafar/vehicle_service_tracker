@@ -79,7 +79,7 @@ function routeToDashboard() {
         return;
     }
 
-    if (user.role === "mechanic") {
+    if (user.role === "mechanic" || user.role === "centre_admin") {
         window.location.href = "mechanic-dashboard.html";
         return;
     }
@@ -114,15 +114,80 @@ function formatMoney(value) {
     }).format(number);
 }
 
+function isExpired(value) {
+    return value ? new Date(value).getTime() < Date.now() : false;
+}
+
 function roleLabel(role) {
     if (role === "mechanic") return "Service Provider";
+    if (role === "centre_admin") return "Centre Admin";
     if (role === "admin") return "Admin";
     return "Vehicle Owner";
 }
 
 function statusPill(status) {
     const safeStatus = escapeHtml(status || "approved");
-    return `<span class="pill ${safeStatus === "pending" ? "pill-warning" : "pill-success"}">${safeStatus}</span>`;
+    const className = safeStatus === "pending"
+        ? "pill-warning"
+        : safeStatus === "rejected" || safeStatus === "inactive" || safeStatus === "expired"
+            ? "pill-danger"
+            : "pill-success";
+    return `<span class="pill ${className}">${safeStatus}</span>`;
+}
+
+function verifiedBadge(label = "Verified") {
+    return `<span class="pill pill-verified">${escapeHtml(label)}</span>`;
+}
+
+function reportStatusPill(report) {
+    if (!report || Number(report.is_active) === 0) {
+        return statusPill("inactive");
+    }
+
+    if (isExpired(report.expires_at)) {
+        return statusPill("expired");
+    }
+
+    return statusPill("active");
+}
+
+function appNav(active = "") {
+    const user = getUser();
+    const isAdmin = user.role === "admin";
+    const isCentre = user.role === "mechanic" || user.role === "centre_admin";
+    const items = isAdmin
+        ? [
+            ["Overview", "admin-dashboard.html", "overview"],
+            ["Pending Centres", "admin-dashboard.html#pending", "pending"],
+            ["Users", "admin-dashboard.html#users", "users"],
+            ["Vehicles", "admin-dashboard.html#vehicles", "vehicles"],
+            ["Service Records", "admin-dashboard.html#services", "services"],
+            ["Public Reports", "admin-dashboard.html#reports", "reports"]
+        ]
+        : isCentre
+            ? [
+                ["Dashboard", "mechanic-dashboard.html", "dashboard"],
+                ["Centre Vehicles", "mechanic-dashboard.html#vehicles", "vehicles"],
+                ["Vehicle Lookup", "mechanic-dashboard.html#lookup", "lookup"],
+                ["Service Records", "mechanic-dashboard.html#records", "records"],
+                ["Add Service", "add-service.html", "add-service"]
+            ]
+            : [
+                ["Dashboard", "owner-dashboard.html", "dashboard"],
+                ["My Vehicles", "owner-dashboard.html#vehicles", "vehicles"],
+                ["Service History", "owner-dashboard.html#history", "history"],
+                ["Public Reports", "owner-dashboard.html#reports", "reports"],
+                ["Add Vehicle", "add-vehicle.html", "add-vehicle"]
+            ];
+
+    return `
+        <nav class="app-nav" aria-label="Application navigation">
+            ${items.map(([label, href, key]) => `
+                <a class="${active === key ? "active" : ""}" href="${href}">${label}</a>
+            `).join("")}
+            <button class="btn btn-ghost btn-nav" onclick="logout()">Logout</button>
+        </nav>
+    `;
 }
 
 function showMessage(elementId, message, type = "success") {

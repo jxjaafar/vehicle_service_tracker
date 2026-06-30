@@ -45,9 +45,11 @@ const requireApproved = (req, res, next) => {
         });
     }
 
-    if (req.user.role === "mechanic" && req.user.status !== "approved") {
+    const centreRole = req.user.role === "mechanic" || req.user.role === "centre_admin";
+
+    if (centreRole && (req.user.status !== "approved" || req.user.centre_status !== "approved")) {
         return res.status(403).json({
-            message: "Your account is pending admin approval"
+            message: "Your service centre account is pending main admin approval"
         });
     }
 
