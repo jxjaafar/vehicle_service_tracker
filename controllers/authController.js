@@ -2,7 +2,18 @@ const db = require("../config/db");
 const bcrypt = require("bcryptjs");
 
 const register = async (req, res) => {
-    let { full_name, email, password, role } = req.body;
+    let {
+        full_name,
+        email,
+        password,
+        role,
+        centre_name,
+        business_registration_number,
+        centre_email,
+        centre_phone,
+        centre_address,
+        centre_city
+    } = req.body;
 
     if (!full_name || !email || !password || !role) {
         return res.status(400).json({
@@ -16,47 +27,135 @@ const register = async (req, res) => {
         });
     }
 
-    if (role === "service_provider") {
-        role = "mechanic";
+    if (role === "service_provider" || role === "mechanic") {
+        role = "centre_admin";
     }
 
-    const validRoles = ["owner", "mechanic", "admin"];
+    const validRoles = ["owner", "centre_admin", "mechanic", "admin"];
     if (!validRoles.includes(role)) {
         return res.status(400).json({
-            message: "Invalid role. Allowed: owner, mechanic, admin"
+            message: "Invalid role. Allowed: owner, centre_admin, mechanic, admin"
         });
+    }
+
+    if (role === "centre_admin") {
+        if (!centre_name || !centre_phone || !centre_address || !centre_city) {
+            return res.status(400).json({
+                message: "Service centre name, phone, address, and city are required"
+            });
+        }
     }
 
     try {
         const hashedPassword = await bcrypt.hash(password, 10);
-        const status = role === "mechanic" ? "pending" : "approved";
+        const status = role === "centre_admin" || role === "mechanic" ? "pending" : "approved";
 
-        const sql = `
-        INSERT INTO users(full_name, email, password, role, status, created_at)
-        VALUES(?, ?, ?, ?, ?, NOW())
-        `;
+        db.beginTransaction((transactionErr) => {
+            if (transactionErr) {
+                return res.status(500).json({
+                    message: "Error starting registration",
+                    error: transactionErr.message
+                });
+            }
 
-        db.query(
-            sql,
-            [full_name, email, hashedPassword, role, status],
-            (err, result) => {
+            const userSql = `
+                INSERT INTO users(full_name, email, password, role, status, created_at)
+                VALUES(?, ?, ?, ?, ?, NOW())
+            `;
+
+            db.query(userSql, [full_name, email, hashedPassword, role, status], (err, userResult) => {
                 if (err) {
-                    if (err.code === "ER_DUP_ENTRY") {
-                        return res.status(400).json({
-                            message: "Email already registered"
+                    return db.rollback(() => {
+                        if (err.code === "ER_DUP_ENTRY") {
+                            return res.status(400).json({
+                                message: "Email already registered"
+                            });
+                        }
+
+                        return res.status(500).json({
+                            message: "Error registering user",
+                            error: err.message
                         });
-                    }
-                    return res.status(500).json({
-                        message: "Error registering user",
-                        error: err.message
                     });
                 }
 
-                res.status(201).json({
-                    message: role === "mechanic" ? "Registration successful! Awaiting admin approval" : "User registered successfully"
-                });
-            }
-        );
+                if (role !== "centre_admin") {
+                    return db.commit((commitErr) => {
+                        if (commitErr) {
+                            return db.rollback(() => res.status(500).json({
+                                message: "Error completing registration",
+                                error: commitErr.message
+                            }));
+                        }
+
+                        return res.status(201).json({
+                            message: "User registered successfully"
+                        });
+                    });
+                }
+
+                const centreSql = `
+                    INSERT INTO service_centres
+                    (centre_name, business_registration_number, email, phone, address, city, status, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, 'pending', NOW())
+                `;
+
+                db.query(
+                    centreSql,
+                    [
+                        centre_name,
+                        business_registration_number || null,
+                        centre_email || email,
+                        centre_phone,
+                        centre_address,
+                        centre_city
+                    ],
+                    (centreErr, centreResult) => {
+                        if (centreErr) {
+                            return db.rollback(() => {
+                                if (centreErr.code === "ER_DUP_ENTRY") {
+                                    return res.status(400).json({
+                                        message: "Service centre email or registration number already exists"
+                                    });
+                                }
+
+                                return res.status(500).json({
+                                    message: "Error registering service centre",
+                                    error: centreErr.message
+                                });
+                            });
+                        }
+
+                        const staffSql = `
+                            INSERT INTO centre_staff (centre_id, user_id, staff_role, status, created_at)
+                            VALUES (?, ?, 'centre_admin', 'active', NOW())
+                        `;
+
+                        db.query(staffSql, [centreResult.insertId, userResult.insertId], (staffErr) => {
+                            if (staffErr) {
+                                return db.rollback(() => res.status(500).json({
+                                    message: "Error linking centre admin",
+                                    error: staffErr.message
+                                }));
+                            }
+
+                            db.commit((commitErr) => {
+                                if (commitErr) {
+                                    return db.rollback(() => res.status(500).json({
+                                        message: "Error completing registration",
+                                        error: commitErr.message
+                                    }));
+                                }
+
+                                res.status(201).json({
+                                    message: "Service centre registered successfully! Awaiting main admin approval"
+                                });
+                            });
+                        });
+                    }
+                );
+            });
+        });
     } catch (error) {
         res.status(500).json({
             message: "Error registering user",
@@ -76,7 +175,14 @@ const login = (req, res) => {
         });
     }
 
-    const sql = "SELECT * FROM users WHERE email = ?";
+    const sql = `
+        SELECT u.*, cs.centre_id, cs.staff_role, sc.centre_name, sc.status AS centre_status
+        FROM users u
+        LEFT JOIN centre_staff cs ON cs.user_id = u.user_id AND cs.status = 'active'
+        LEFT JOIN service_centres sc ON sc.centre_id = cs.centre_id
+        WHERE u.email = ?
+        LIMIT 1
+    `;
 
     db.query(sql, [email], async (err, results) => {
         if (err) {
@@ -102,9 +208,10 @@ const login = (req, res) => {
             });
         }
 
-        if (user.role === "mechanic" && user.status !== "approved") {
+        const centreRole = user.role === "centre_admin" || user.role === "mechanic";
+        if (centreRole && (user.status !== "approved" || user.centre_status !== "approved")) {
             return res.status(403).json({
-                message: "Your account is pending admin approval"
+                message: "Your service centre account is pending main admin approval"
             });
         }
 
@@ -112,7 +219,11 @@ const login = (req, res) => {
             {
                 user_id: user.user_id,
                 role: user.role,
-                status: user.status
+                status: user.status,
+                centre_id: user.centre_id || null,
+                centre_name: user.centre_name || null,
+                centre_status: user.centre_status || null,
+                staff_role: user.staff_role || null
             },
             process.env.JWT_SECRET,
             {
@@ -128,7 +239,11 @@ const login = (req, res) => {
                 full_name: user.full_name,
                 email: user.email,
                 role: user.role,
-                status: user.status
+                status: user.status,
+                centre_id: user.centre_id || null,
+                centre_name: user.centre_name || null,
+                centre_status: user.centre_status || null,
+                staff_role: user.staff_role || null
             }
         });
     });

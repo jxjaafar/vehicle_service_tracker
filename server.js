@@ -7,6 +7,10 @@ const app = express();
 // Middleware
 app.use(express.json());
 
+app.get("/", (req, res) => {
+    res.sendFile(path.join(__dirname, "frontend", "landing.html"));
+});
+
 // ✅ Serve frontend properly
 app.use(express.static(path.join(__dirname, "frontend")));
 
@@ -19,11 +23,6 @@ const reportRoutes = require("./routes/reportRoutes");
 
 // Middleware
 const { verifyToken, requireApproved } = require("./middleware/authMiddleware");
-
-// Routes
-app.get("/", (req, res) => {
-    res.sendFile(path.join(__dirname, "frontend", "login.html"));
-});
 
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);

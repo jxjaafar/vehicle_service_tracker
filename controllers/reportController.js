@@ -152,10 +152,13 @@ const getPublicReport = (req, res) => {
 
         const report = reports[0];
         const historySql = `
-            SELECT service_id, service_date, mileage, description, parts_replaced, cost, created_at
-            FROM service_records
-            WHERE vehicle_id = ?
-            ORDER BY service_date DESC
+            SELECT sr.service_id, sr.service_date, sr.mileage, sr.description, sr.parts_replaced,
+                   sr.cost, sr.created_at, sc.centre_name, u.full_name AS service_provider_name
+            FROM service_records sr
+            LEFT JOIN service_centres sc ON sr.service_centre_id = sc.centre_id
+            LEFT JOIN users u ON COALESCE(sr.recorded_by, sr.serviced_by) = u.user_id
+            WHERE sr.vehicle_id = ?
+            ORDER BY sr.service_date DESC
         `;
 
         db.query(historySql, [report.vehicle_id], (historyErr, records) => {

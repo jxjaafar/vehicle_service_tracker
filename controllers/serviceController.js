@@ -10,9 +10,17 @@ const addServiceRecord = (req, res) => {
         cost
     } = req.body;
 
-    if (req.user.role !== "mechanic" && req.user.role !== "admin") {
+    const centreRole = req.user.role === "centre_admin" || req.user.role === "mechanic";
+
+    if (!centreRole && req.user.role !== "admin") {
         return res.status(403).json({
-            message: "Only approved service providers can add service records"
+            message: "Only approved service centres can add service records"
+        });
+    }
+
+    if (centreRole && !req.user.centre_id) {
+        return res.status(403).json({
+            message: "Your account is not linked to an approved service centre"
         });
     }
 
@@ -30,12 +38,22 @@ const addServiceRecord = (req, res) => {
 
     const sql = `
         INSERT INTO service_records
-        (vehicle_id, service_date, mileage, description, parts_replaced, cost, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, NOW())
+        (vehicle_id, service_date, mileage, description, parts_replaced, cost, service_centre_id, recorded_by, serviced_by, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
     `;
 
     db.query(sql,
-        [vehicle_id, service_date, mileage, description, parts_replaced || null, cost],
+        [
+            vehicle_id,
+            service_date,
+            mileage,
+            description,
+            parts_replaced || null,
+            cost,
+            req.user.centre_id || null,
+            req.user.user_id,
+            req.user.user_id
+        ],
         (err, result) => {
             if (err) {
                 return res.status(500).json({
@@ -62,26 +80,43 @@ const getServiceHistory = (req, res) => {
     }
 
     const isOwner = req.user.role === "owner";
+    const centreRole = req.user.role === "centre_admin" || req.user.role === "mechanic";
 
-    const sql = isOwner
-        ? `
-            SELECT sr.*, v.make, v.model, v.vin_number, v.registration_number, u.full_name AS owner_name
-            FROM service_records sr
-            INNER JOIN vehicles v ON sr.vehicle_id = v.vehicle_id
-            LEFT JOIN users u ON v.owner_id = u.user_id
-            WHERE sr.vehicle_id = ? AND v.owner_id = ?
-            ORDER BY sr.service_date DESC
-        `
-        : `
-            SELECT sr.*, v.make, v.model, v.vin_number, v.registration_number, u.full_name AS owner_name
-            FROM service_records sr
-            INNER JOIN vehicles v ON sr.vehicle_id = v.vehicle_id
-            LEFT JOIN users u ON v.owner_id = u.user_id
-            WHERE sr.vehicle_id = ?
-            ORDER BY sr.service_date DESC
+    let sql = `
+        SELECT sr.*, v.make, v.model, v.vin_number, v.registration_number,
+               u.full_name AS owner_name,
+               sp.full_name AS service_provider_name,
+               sc.centre_name
+        FROM service_records sr
+        INNER JOIN vehicles v ON sr.vehicle_id = v.vehicle_id
+        LEFT JOIN users u ON v.owner_id = u.user_id
+        LEFT JOIN users sp ON COALESCE(sr.recorded_by, sr.serviced_by) = sp.user_id
+        LEFT JOIN service_centres sc ON sr.service_centre_id = sc.centre_id
+        WHERE sr.vehicle_id = ?
+    `;
+    const params = [vehicle_id];
+
+    if (isOwner) {
+        sql += " AND v.owner_id = ?";
+        params.push(req.user.user_id);
+    } else if (centreRole) {
+        sql += `
+            AND EXISTS (
+                SELECT 1
+                FROM service_records own_sr
+                WHERE own_sr.vehicle_id = sr.vehicle_id
+                  AND (
+                      own_sr.service_centre_id = ?
+                      OR own_sr.serviced_by = ?
+                  )
+            )
         `;
+        params.push(req.user.centre_id || 0, req.user.user_id);
+    }
 
-    db.query(sql, isOwner ? [vehicle_id, req.user.user_id] : [vehicle_id], (err, results) => {
+    sql += " ORDER BY sr.service_date DESC";
+
+    db.query(sql, params, (err, results) => {
         if (err) {
             return res.status(500).json({
                 message: "Error retrieving service history",
@@ -95,25 +130,32 @@ const getServiceHistory = (req, res) => {
 
 const getAllServiceRecords = (req, res) => {
     const isOwner = req.user.role === "owner";
+    const centreRole = req.user.role === "centre_admin" || req.user.role === "mechanic";
 
-    const sql = isOwner
-        ? `
-            SELECT sr.*, v.make, v.model, v.vin_number, v.registration_number, u.full_name AS owner_name
-            FROM service_records sr
-            INNER JOIN vehicles v ON sr.vehicle_id = v.vehicle_id
-            LEFT JOIN users u ON v.owner_id = u.user_id
-            WHERE v.owner_id = ?
-            ORDER BY sr.created_at DESC
-        `
-        : `
-            SELECT sr.*, v.make, v.model, v.vin_number, v.registration_number, u.full_name AS owner_name
-            FROM service_records sr
-            LEFT JOIN vehicles v ON sr.vehicle_id = v.vehicle_id
-            LEFT JOIN users u ON v.owner_id = u.user_id
-            ORDER BY sr.created_at DESC
-        `;
+    let sql = `
+        SELECT sr.*, v.make, v.model, v.vin_number, v.registration_number,
+               u.full_name AS owner_name,
+               sp.full_name AS service_provider_name,
+               sc.centre_name
+        FROM service_records sr
+        INNER JOIN vehicles v ON sr.vehicle_id = v.vehicle_id
+        LEFT JOIN users u ON v.owner_id = u.user_id
+        LEFT JOIN users sp ON COALESCE(sr.recorded_by, sr.serviced_by) = sp.user_id
+        LEFT JOIN service_centres sc ON sr.service_centre_id = sc.centre_id
+    `;
+    const params = [];
 
-    db.query(sql, isOwner ? [req.user.user_id] : [], (err, results) => {
+    if (isOwner) {
+        sql += " WHERE v.owner_id = ?";
+        params.push(req.user.user_id);
+    } else if (centreRole) {
+        sql += " WHERE sr.service_centre_id = ? OR sr.serviced_by = ?";
+        params.push(req.user.centre_id || 0, req.user.user_id);
+    }
+
+    sql += " ORDER BY sr.created_at DESC";
+
+    db.query(sql, params, (err, results) => {
         if (err) {
             return res.status(500).json({
                 message: "Error retrieving service records",
