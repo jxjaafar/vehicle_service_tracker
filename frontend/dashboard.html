@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Vehicle Service System</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="app-page">
+    <main class="center-state">
+        <div class="spinner"></div>
+        <h1>Loading your dashboard</h1>
+    </main>
+
+    <script src="js/app.js"></script>
+    <script>
+        if (!getToken()) {
+            window.location.href = "login.html";
+        } else {
+            routeToDashboard();
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Vehicle Service System</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="app-page">
+    <header class="app-header">
+        <div>
+            <p class="eyebrow">Admin Dashboard</p>
+            <h1>System Control Center</h1>
+        </div>
+        <nav class="header-actions">
+            <a class="btn btn-secondary" href="add-service.html">Add Service</a>
+            <button class="btn btn-ghost" onclick="logout()">Logout</button>
+        </nav>
+    </header>
+    <div id="appNav"></div>
+
+    <main class="app-shell">
+        <section class="metric-grid">
+            <article class="metric-card">
+                <span>Total Users</span>
+                <strong id="totalUsers">0</strong>
+            </article>
+            <article class="metric-card">
+                <span>Total Vehicles</span>
+                <strong id="totalVehicles">0</strong>
+            </article>
+            <article class="metric-card">
+                <span>Service Records</span>
+                <strong id="totalServices">0</strong>
+            </article>
+            <article class="metric-card">
+                <span>Service Centres</span>
+                <strong id="totalCentres">0</strong>
+            </article>
+            <article class="metric-card">
+                <span>Pending Centres</span>
+                <strong id="pendingMechanics">0</strong>
+            </article>
+            <article class="metric-card">
+                <span>Active Reports</span>
+                <strong id="activeReports">0</strong>
+            </article>
+        </section>
+
+        <section class="panel" id="pending">
+            <div class="panel-heading">
+                <div>
+                    <p class="eyebrow">Approval queue</p>
+                    <h2>Pending Service Centres</h2>
+                </div>
+            </div>
+            <div id="pendingContainer" class="stack-list loading">Loading pending centres...</div>
+        </section>
+
+        <section class="dashboard-tabs">
+            <div class="panel" id="centres">
+                <div class="panel-heading">
+                    <div>
+                        <p class="eyebrow">service_centres table</p>
+                        <h2>Service Centres</h2>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Centre</th>
+                                <th>Location</th>
+                                <th>Contact</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="centresBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="panel" id="users">
+                <div class="panel-heading">
+                    <div>
+                        <p class="eyebrow">users table</p>
+                        <h2>Users</h2>
+                    </div>
+                </div>
+                <div class="filter-row">
+                    <input type="search" id="userSearch" placeholder="Search users by name, email, role, or centre">
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Centre</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="panel" id="vehicles">
+                <div class="panel-heading">
+                    <div>
+                        <p class="eyebrow">vehicles table</p>
+                        <h2>Vehicles</h2>
+                    </div>
+                </div>
+                <div class="filter-row">
+                    <input type="search" id="vehicleSearch" placeholder="Search vehicles, owners, registration, or VIN">
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Owner</th>
+                                <th>Registration</th>
+                                <th>Vehicle</th>
+                                <th>VIN</th>
+                                <th>Report</th>
+                            </tr>
+                        </thead>
+                        <tbody id="vehiclesBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="panel" id="services">
+                <div class="panel-heading">
+                    <div>
+                        <p class="eyebrow">service_records table</p>
+                        <h2>Service Records</h2>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Vehicle</th>
+                                <th>Centre</th>
+                                <th>Description</th>
+                                <th>Cost</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="servicesBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="panel" id="reports">
+                <div class="panel-heading">
+                    <div>
+                        <p class="eyebrow">vehicle_reports table</p>
+                        <h2>Public Reports</h2>
+                    </div>
+                </div>
+                <div id="reportsContainer" class="stack-list loading">Loading reports...</div>
+            </div>
+        </section>
+    </main>
+
+    <script src="js/app.js"></script>
+    <script>
+        const session = requireAuth(["admin"]);
+        let adminUsers = [];
+        let adminVehicles = [];
+
+        if (session) {
+            document.getElementById("appNav").innerHTML = appNav("overview");
+            loadAdminDashboard();
+            document.getElementById("userSearch").addEventListener("input", () => renderUsers(adminUsers));
+            document.getElementById("vehicleSearch").addEventListener("input", () => renderVehicles(adminVehicles));
+        }
+
+        async function loadAdminDashboard() {
+            try {
+                const [stats, pending, centres, users, vehicles, services, reports] = await Promise.all([
+                    apiFetch("/admin/stats"),
+                    apiFetch("/admin/centres/pending"),
+                    apiFetch("/admin/centres"),
+                    apiFetch("/admin/users"),
+                    apiFetch("/admin/vehicles"),
+                    apiFetch("/admin/services"),
+                    apiFetch("/reports")
+                ]);
+
+                document.getElementById("totalUsers").textContent = stats.total_users || 0;
+                document.getElementById("totalVehicles").textContent = stats.total_vehicles || 0;
+                document.getElementById("totalServices").textContent = stats.total_services || 0;
+                document.getElementById("totalCentres").textContent = stats.total_centres || 0;
+                document.getElementById("pendingMechanics").textContent = stats.pending_mechanics || 0;
+                document.getElementById("activeReports").textContent = reports.filter((report) => Number(report.is_active) === 1 && !isExpired(report.expires_at)).length;
+
+                adminUsers = users;
+                adminVehicles = vehicles;
+                renderPending(pending);
+                renderCentres(centres);
+                renderUsers(users);
+                renderVehicles(vehicles);
+                renderServices(services);
+                renderReports(reports);
+            } catch (error) {
+                document.getElementById("pendingContainer").innerHTML = `<div class="empty-state">${escapeHtml(error.message)}</div>`;
+            }
+        }
+
+        function renderPending(centres) {
+            const container = document.getElementById("pendingContainer");
+
+            if (!centres.length) {
+                container.className = "empty-state";
+                container.textContent = "No service centres are waiting for approval.";
+                return;
+            }
+
+            container.className = "stack-list";
+            container.innerHTML = centres.map((centre) => `
+                <article class="record-card">
+                    <div>
+                        <h3>${escapeHtml(centre.centre_name)}</h3>
+                        <p>${escapeHtml(centre.address)}, ${escapeHtml(centre.city)} · ${escapeHtml(centre.phone)}</p>
+                        <p class="muted">Admin: ${escapeHtml(centre.full_name)} · ${escapeHtml(centre.admin_email)} · Registered ${formatDate(centre.created_at)}</p>
+                        <div class="record-meta">${statusPill("pending")}</div>
+                    </div>
+                    <div class="button-row">
+                        <button class="btn btn-small" onclick="approveMechanic(${centre.centre_id})">Approve</button>
+                        <button class="btn btn-small btn-danger" onclick="rejectMechanic(${centre.centre_id})">Reject</button>
+                    </div>
+                </article>
+            `).join("");
+        }
+
+        function renderCentres(centres) {
+            document.getElementById("centresBody").innerHTML = centres.length ? centres.map((centre) => `
+                <tr>
+                    <td>${escapeHtml(centre.centre_name)}<br><span class="muted">${escapeHtml(centre.business_registration_number || "No registration number")}</span></td>
+                    <td>${escapeHtml(centre.address)}, ${escapeHtml(centre.city)}</td>
+                    <td>${escapeHtml(centre.phone)}<br><span class="muted">${escapeHtml(centre.email)}</span></td>
+                    <td>${statusPill(centre.status)}</td>
+                </tr>
+            `).join("") : '<tr><td colspan="4">No centres found.</td></tr>';
+        }
+
+        function renderUsers(users) {
+            const query = document.getElementById("userSearch").value.trim().toLowerCase();
+            const filtered = query
+                ? users.filter((user) => [user.full_name, user.email, user.role, user.centre_name, user.status, user.centre_status].some((value) => String(value || "").toLowerCase().includes(query)))
+                : users;
+
+            document.getElementById("usersBody").innerHTML = filtered.length ? filtered.map((user) => `
+                <tr>
+                    <td>${escapeHtml(user.full_name)}</td>
+                    <td>${escapeHtml(user.email)}</td>
+                    <td><span class="pill pill-neutral">${roleLabel(user.role)}</span></td>
+                    <td>${escapeHtml(user.centre_name || "None")}</td>
+                    <td>${statusPill(user.centre_status || user.status)}</td>
+                </tr>
+            `).join("") : '<tr><td colspan="5">No users found.</td></tr>';
+        }
+
+        function renderVehicles(vehicles) {
+            const query = document.getElementById("vehicleSearch").value.trim().toLowerCase();
+            const filtered = query
+                ? vehicles.filter((vehicle) => [vehicle.owner_name, vehicle.registration_number, vehicle.make, vehicle.model, vehicle.vin_number].some((value) => String(value || "").toLowerCase().includes(query)))
+                : vehicles;
+
+            document.getElementById("vehiclesBody").innerHTML = filtered.length ? filtered.map((vehicle) => `
+                <tr>
+                    <td>${escapeHtml(vehicle.owner_name || "Unknown")}</td>
+                    <td>${escapeHtml(vehicle.registration_number)}</td>
+                    <td>${escapeHtml(vehicle.make)} ${escapeHtml(vehicle.model)} (${escapeHtml(vehicle.year_manufactured)})</td>
+                    <td>${escapeHtml(vehicle.vin_number)}</td>
+                    <td><button class="btn btn-small" onclick="generateReport(${vehicle.vehicle_id})">Generate</button></td>
+                </tr>
+            `).join("") : '<tr><td colspan="5">No vehicles found.</td></tr>';
+        }
+
+        function renderServices(services) {
+            document.getElementById("servicesBody").innerHTML = services.length ? services.map((service) => `
+                <tr>
+                    <td>${formatDate(service.service_date)}</td>
+                    <td>${escapeHtml(service.make)} ${escapeHtml(service.model)}</td>
+                    <td>${escapeHtml(service.centre_name || "Legacy / Admin")}</td>
+                    <td>${escapeHtml(service.description)}</td>
+                    <td>${formatMoney(service.cost)}</td>
+                    <td>${verifiedBadge()}</td>
+                </tr>
+            `).join("") : '<tr><td colspan="6">No service records found.</td></tr>';
+        }
+
+        function renderReports(reports) {
+            const container = document.getElementById("reportsContainer");
+
+            if (!reports.length) {
+                container.className = "empty-state";
+                container.textContent = "No public reports have been generated yet.";
+                return;
+            }
+
+            container.className = "stack-list";
+            container.innerHTML = reports.map((report) => {
+                const reportUrl = `${window.location.origin}/report.html?code=${report.report_code}`;
+                return `
+                    <article class="record-card">
+                        <div>
+                            <h3>${escapeHtml(report.make)} ${escapeHtml(report.model)}</h3>
+                            <p>${escapeHtml(report.registration_number)} · ${escapeHtml(report.owner_name || "Owner")}</p>
+                            <p class="muted">Code: ${escapeHtml(report.report_code)} · Expires ${formatDate(report.expires_at)}</p>
+                            <div class="record-meta">${reportStatusPill(report)}</div>
+                        </div>
+                        <div class="button-row">
+                            <button class="btn btn-small" onclick="copyReportLink('${reportUrl}')">Copy Link</button>
+                            ${report.is_active ? `<button class="btn btn-small btn-danger" onclick="deactivateReport(${report.report_id})">Deactivate</button>` : ""}
+                        </div>
+                    </article>
+                `;
+            }).join("");
+        }
+
+        async function approveMechanic(centreId) {
+            try {
+                await apiFetch("/admin/centres/approve", {
+                    method: "POST",
+                    body: JSON.stringify({ centre_id: centreId })
+                });
+                loadAdminDashboard();
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        async function rejectMechanic(centreId) {
+            try {
+                await apiFetch("/admin/centres/reject", {
+                    method: "POST",
+                    body: JSON.stringify({ centre_id: centreId })
+                });
+                loadAdminDashboard();
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        async function generateReport(vehicleId) {
+            try {
+                const data = await apiFetch("/reports", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        vehicle_id: vehicleId,
+                        expires_in_days: 14
+                    })
+                });
+                await copyReportLink(`${window.location.origin}${data.report_url}`);
+                loadAdminDashboard();
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        async function deactivateReport(reportId) {
+            try {
+                await apiFetch(`/reports/${reportId}/deactivate`, { method: "PATCH" });
+                loadAdminDashboard();
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        async function copyReportLink(url) {
+            if (navigator.clipboard) {
+                await navigator.clipboard.writeText(url);
+                alert("Report link copied");
+                return;
+            }
+            window.prompt("Copy report link", url);
+        }
+    </script>
+</body>
+</html>

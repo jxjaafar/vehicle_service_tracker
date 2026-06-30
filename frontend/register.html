@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - Vehicle Service System</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="auth-page">
+    <header class="site-nav auth-nav">
+        <a class="brand-mark" href="landing.html">
+            <span class="brand-icon">V</span>
+            <span>Vehicle Service</span>
+        </a>
+        <nav class="nav-links">
+            <a href="landing.html">Home</a>
+            <a href="report.html">Open report</a>
+            <a class="btn btn-ghost" href="login.html">Login</a>
+        </nav>
+    </header>
+    <main class="auth-layout">
+        <section class="auth-hero">
+            <p class="eyebrow">Join the system</p>
+            <h1>Create an owner account or register a service centre.</h1>
+            <p class="hero-copy">Vehicle owners can start immediately. Service provider accounts require admin approval before access.</p>
+        </section>
+
+        <section class="auth-card">
+            <div class="section-heading">
+                <p class="eyebrow">New account</p>
+                <h2>Register</h2>
+            </div>
+
+            <form id="registerForm" class="form-stack">
+                <label class="field">
+                    <span>Full Name</span>
+                    <input type="text" id="fullName" name="fullName" autocomplete="name" placeholder="Your full name" required>
+                </label>
+
+                <label class="field">
+                    <span>Email</span>
+                    <input type="email" id="email" name="email" autocomplete="email" placeholder="you@example.com" required>
+                </label>
+
+                <label class="field">
+                    <span>Password</span>
+                    <input type="password" id="password" name="password" autocomplete="new-password" placeholder="At least 6 characters" required>
+                </label>
+
+                <label class="field">
+                    <span>Account Type</span>
+                    <select id="role" name="role" required>
+                        <option value="owner">Vehicle Owner</option>
+                        <option value="centre_admin">Service Centre</option>
+                    </select>
+                </label>
+
+                <div id="centreFields" class="form-grid nested-fields" hidden>
+                    <label class="field span-2">
+                        <span>Service Centre Name</span>
+                        <input type="text" id="centreName" placeholder="AutoCare Nairobi Centre">
+                    </label>
+
+                    <label class="field">
+                        <span>Business Registration No.</span>
+                        <input type="text" id="businessRegistration" placeholder="Optional">
+                    </label>
+
+                    <label class="field">
+                        <span>Centre Email</span>
+                        <input type="email" id="centreEmail" placeholder="garage@example.com">
+                    </label>
+
+                    <label class="field">
+                        <span>Phone</span>
+                        <input type="tel" id="centrePhone" placeholder="+254 700 000 000">
+                    </label>
+
+                    <label class="field">
+                        <span>City</span>
+                        <input type="text" id="centreCity" placeholder="Nairobi">
+                    </label>
+
+                    <label class="field span-2">
+                        <span>Location / Address</span>
+                        <input type="text" id="centreAddress" placeholder="Road, building, area">
+                    </label>
+                </div>
+
+                <p class="form-note" id="roleNote" hidden>Service provider accounts require admin approval before access.</p>
+
+                <button type="submit" class="btn btn-primary">Create Account</button>
+            </form>
+
+            <p class="auth-link">Already registered? <a href="login.html">Sign in</a></p>
+            <div class="message" id="message" hidden></div>
+        </section>
+    </main>
+
+    <script src="js/app.js"></script>
+    <script>
+        const roleSelect = document.getElementById("role");
+        const roleNote = document.getElementById("roleNote");
+        const centreFields = document.getElementById("centreFields");
+        const centreInputs = [...centreFields.querySelectorAll("input")];
+
+        function syncCentreFields() {
+            const isCentre = roleSelect.value === "centre_admin";
+            roleNote.hidden = !isCentre;
+            centreFields.hidden = !isCentre;
+            centreInputs.forEach((input) => {
+                input.required = isCentre && ["centreName", "centrePhone", "centreCity", "centreAddress"].includes(input.id);
+            });
+        }
+
+        roleSelect.addEventListener("change", syncCentreFields);
+        syncCentreFields();
+
+        document.getElementById("registerForm").addEventListener("submit", async (event) => {
+            event.preventDefault();
+
+            try {
+                const data = await apiFetch("/auth/register", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        full_name: document.getElementById("fullName").value.trim(),
+                        email: document.getElementById("email").value.trim(),
+                        password: document.getElementById("password").value,
+                        role: roleSelect.value,
+                        centre_name: document.getElementById("centreName").value.trim(),
+                        business_registration_number: document.getElementById("businessRegistration").value.trim(),
+                        centre_email: document.getElementById("centreEmail").value.trim(),
+                        centre_phone: document.getElementById("centrePhone").value.trim(),
+                        centre_city: document.getElementById("centreCity").value.trim(),
+                        centre_address: document.getElementById("centreAddress").value.trim()
+                    })
+                });
+
+                showMessage("message", data.message || "Account created successfully");
+                setTimeout(() => {
+                    window.location.href = "login.html";
+                }, 1200);
+            } catch (error) {
+                showMessage("message", error.message, "error");
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Service Provider Dashboard - Vehicle Service System</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="app-page">
+    <header class="app-header">
+        <div>
+            <p class="eyebrow">Service Centre Dashboard</p>
+            <h1 id="welcomeTitle">Service Workbench</h1>
+        </div>
+        <nav class="header-actions">
+            <a class="btn btn-secondary" href="add-service.html" id="addServiceLink">Add Service</a>
+            <button class="btn btn-ghost" onclick="logout()">Logout</button>
+        </nav>
+    </header>
+    <div id="appNav"></div>
+
+    <main class="app-shell">
+        <section id="pendingPanel" class="panel notice-panel" hidden>
+            <p class="eyebrow">Pending approval</p>
+            <h2>Your service centre is waiting for main admin approval.</h2>
+            <p>After approval your centre can view its serviced vehicles and create service records.</p>
+        </section>
+
+        <section id="approvedContent">
+            <section class="metric-grid">
+                <article class="metric-card">
+                    <span>Vehicles Serviced Here</span>
+                    <strong id="vehicleCount">0</strong>
+                </article>
+                <article class="metric-card">
+                    <span>Service Records</span>
+                    <strong id="serviceCount">0</strong>
+                </article>
+                <article class="metric-card">
+                    <span>Status</span>
+                    <strong id="centreStatus">Approved</strong>
+                </article>
+                <article class="metric-card">
+                    <span>Centre</span>
+                    <strong id="centreNameMetric">Ready</strong>
+                </article>
+            </section>
+
+            <section class="content-grid">
+                <div class="panel" id="vehicles">
+                    <div class="panel-heading">
+                        <div>
+                            <p class="eyebrow">Centre log</p>
+                            <h2>Vehicles Serviced Here</h2>
+                        </div>
+                    </div>
+                    <div id="vehiclesContainer" class="stack-list loading">Loading vehicles...</div>
+                </div>
+
+                <div class="panel" id="records">
+                    <div class="panel-heading">
+                        <div>
+                            <p class="eyebrow">Recently recorded</p>
+                            <h2>Service Records</h2>
+                        </div>
+                    </div>
+                    <div id="servicesContainer" class="stack-list loading">Loading services...</div>
+                </div>
+            </section>
+
+            <section class="panel" id="lookup">
+                <div class="panel-heading">
+                    <div>
+                        <p class="eyebrow">Registration lookup</p>
+                        <h2>Find Vehicle History</h2>
+                        <p class="muted">Search outside your centre log before creating a new service record.</p>
+                    </div>
+                </div>
+                <form id="registrationSearchForm" class="inline-form">
+                    <label class="field">
+                        <span>Registration Number</span>
+                        <input type="text" id="registrationSearch" placeholder="KAA 123A" required>
+                    </label>
+                    <button type="submit" class="btn btn-primary">Search</button>
+                </form>
+                <div id="lookupResult" class="lookup-result" hidden></div>
+            </section>
+        </section>
+    </main>
+
+    <script src="js/app.js"></script>
+    <script>
+        const session = requireAuth(["mechanic", "centre_admin"]);
+
+        if (session) {
+            document.getElementById("appNav").innerHTML = appNav("dashboard");
+            document.getElementById("welcomeTitle").textContent = session.user.centre_name
+                ? `${session.user.centre_name} Workbench`
+                : `${session.user.full_name || "Centre"} Workbench`;
+            document.getElementById("centreNameMetric").textContent = session.user.centre_name || "Centre";
+            document.getElementById("centreStatus").textContent = session.user.centre_status || session.user.status || "Approved";
+
+            if (session.user.status !== "approved" || session.user.centre_status !== "approved") {
+                document.getElementById("pendingPanel").hidden = false;
+                document.getElementById("approvedContent").hidden = true;
+                document.getElementById("addServiceLink").hidden = true;
+            } else {
+                loadMechanicDashboard();
+                document.getElementById("registrationSearchForm").addEventListener("submit", searchByRegistration);
+            }
+        }
+
+        async function loadMechanicDashboard() {
+            try {
+                const [vehicles, services] = await Promise.all([
+                    apiFetch("/vehicles"),
+                    apiFetch("/services")
+                ]);
+
+                document.getElementById("vehicleCount").textContent = vehicles.length;
+                document.getElementById("serviceCount").textContent = services.length;
+                renderVehicles(vehicles);
+                renderServices(services);
+            } catch (error) {
+                document.getElementById("vehiclesContainer").innerHTML = `<div class="empty-state">${escapeHtml(error.message)}</div>`;
+                document.getElementById("servicesContainer").innerHTML = `<div class="empty-state">${escapeHtml(error.message)}</div>`;
+            }
+        }
+
+        function renderVehicles(vehicles) {
+            const container = document.getElementById("vehiclesContainer");
+
+            if (!vehicles.length) {
+                container.className = "empty-state";
+                container.textContent = "No vehicles have been serviced at this centre yet. Search a registration number, review the history, then add the first service record for this centre.";
+                return;
+            }
+
+            container.className = "stack-list";
+            container.innerHTML = vehicles.map((vehicle) => `
+                <article class="record-card rich-card">
+                    <div>
+                        <h3>${escapeHtml(vehicle.make)} ${escapeHtml(vehicle.model)}</h3>
+                        <p>${escapeHtml(vehicle.registration_number)} · Owner: ${escapeHtml(vehicle.owner_name || "Unknown")}</p>
+                        <p class="muted">VIN ${escapeHtml(vehicle.vin_number)}</p>
+                        <div class="record-meta">${verifiedBadge("Centre record")}</div>
+                    </div>
+                    <div class="button-row">
+                        <a class="btn btn-secondary btn-small" href="history.html?vehicle_id=${vehicle.vehicle_id}">History</a>
+                        <a class="btn btn-small" href="${addServiceUrl(vehicle)}">Add Service</a>
+                    </div>
+                </article>
+            `).join("");
+        }
+
+        function renderServices(services) {
+            const container = document.getElementById("servicesContainer");
+
+            if (!services.length) {
+                container.className = "empty-state";
+                container.textContent = "No service records have been created yet.";
+                return;
+            }
+
+            container.className = "timeline";
+            container.innerHTML = services.slice(0, 8).map((service) => `
+                <article class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-card report-row">
+                        <div class="timeline-head">
+                            <h3>${escapeHtml(service.make)} ${escapeHtml(service.model)}</h3>
+                            <strong>${formatMoney(service.cost)}</strong>
+                        </div>
+                        <p>${escapeHtml(service.description)}</p>
+                        <p class="muted">${formatDate(service.service_date)} · ${escapeHtml(service.registration_number)} · ${Number(service.mileage).toLocaleString()} km</p>
+                        <div class="record-meta">${verifiedBadge()}</div>
+                    </div>
+                </article>
+            `).join("");
+        }
+
+        async function searchByRegistration(event) {
+            event.preventDefault();
+
+            const result = document.getElementById("lookupResult");
+            const registrationNumber = document.getElementById("registrationSearch").value.trim();
+
+            if (!registrationNumber) return;
+
+            result.hidden = false;
+            result.className = "lookup-result loading";
+            result.textContent = "Searching...";
+
+            try {
+                const data = await apiFetch(`/vehicles/registration/${encodeURIComponent(registrationNumber)}`);
+                renderLookupResult(data.vehicle, data.service_records);
+            } catch (error) {
+                result.className = "empty-state";
+                result.textContent = error.message;
+            }
+        }
+
+        function renderLookupResult(vehicle, records) {
+            const result = document.getElementById("lookupResult");
+            const history = records.length
+                ? records.map((record) => `
+                    <article class="timeline-card compact-timeline-card">
+                        <div class="timeline-head">
+                            <h3>${formatDate(record.service_date)}</h3>
+                            <strong>${formatMoney(record.cost)}</strong>
+                        </div>
+                        <p>${escapeHtml(record.description)}</p>
+                        ${record.parts_replaced ? `<p class="muted">Parts: ${escapeHtml(record.parts_replaced)}</p>` : ""}
+                        <p class="muted">
+                            Mileage: ${Number(record.mileage).toLocaleString()} km ·
+                            Serviced at: ${escapeHtml(record.centre_name || record.service_provider_name || "Unknown centre")}
+                        </p>
+                        <div class="record-meta">${verifiedBadge()}</div>
+                    </article>
+                `).join("")
+                : '<div class="empty-state">No service history has been recorded for this vehicle yet.</div>';
+
+            result.className = "lookup-result";
+            result.innerHTML = `
+                <div class="lookup-summary">
+                    <div>
+                        <p class="eyebrow">${escapeHtml(vehicle.registration_number)}</p>
+                        <h3>${escapeHtml(vehicle.make)} ${escapeHtml(vehicle.model)}</h3>
+                        <p class="muted">VIN ${escapeHtml(vehicle.vin_number)} · Owner: ${escapeHtml(vehicle.owner_name || "Unknown")}</p>
+                    </div>
+                    <a class="btn btn-small" href="${addServiceUrl(vehicle)}">Add Service</a>
+                </div>
+                <div class="stack-list">${history}</div>
+            `;
+        }
+
+        function addServiceUrl(vehicle) {
+            const label = `${vehicle.make} ${vehicle.model} · ${vehicle.registration_number} · ${vehicle.owner_name || "Unknown owner"}`;
+            return `add-service.html?vehicle_id=${encodeURIComponent(vehicle.vehicle_id)}&vehicle_label=${encodeURIComponent(label)}`;
+        }
+    </script>
+</body>
+</html>

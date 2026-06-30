@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Owner Dashboard - Vehicle Service System</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="app-page">
+    <header class="app-header">
+        <div>
+            <p class="eyebrow">Owner Dashboard</p>
+            <h1 id="welcomeTitle">My Vehicles</h1>
+        </div>
+        <nav class="header-actions">
+            <a class="btn btn-secondary" href="add-vehicle.html">Add Vehicle</a>
+            <button class="btn btn-ghost" onclick="logout()">Logout</button>
+        </nav>
+    </header>
+    <div id="appNav"></div>
+
+    <main class="app-shell">
+        <section class="metric-grid">
+            <article class="metric-card featured">
+                <span>Total Vehicles</span>
+                <strong id="vehicleCount">0</strong>
+            </article>
+            <article class="metric-card">
+                <span>Service Records</span>
+                <strong id="serviceCount">0</strong>
+            </article>
+            <article class="metric-card">
+                <span>Latest Service</span>
+                <strong id="latestService">None</strong>
+            </article>
+            <article class="metric-card">
+                <span>Active Reports</span>
+                <strong id="activeReportCount">0</strong>
+            </article>
+        </section>
+
+        <section class="content-grid" id="vehicles">
+            <div class="panel">
+                <div class="panel-heading">
+                    <div>
+                        <p class="eyebrow">Registered assets</p>
+                        <h2>My Vehicles</h2>
+                    </div>
+                    <a class="text-link" href="add-vehicle.html">Add new</a>
+                </div>
+                <div id="vehiclesContainer" class="stack-list loading">Loading vehicles...</div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-heading">
+                    <div>
+                        <p class="eyebrow">From the database</p>
+                        <h2>Recent Service History</h2>
+                    </div>
+                </div>
+                <div id="servicesContainer" class="stack-list loading">Loading services...</div>
+            </div>
+        </section>
+
+        <section class="panel" id="reports">
+            <div class="panel-heading">
+                <div>
+                    <p class="eyebrow">Buyer access</p>
+                    <h2>Public Vehicle Reports</h2>
+                </div>
+            </div>
+            <div id="reportsContainer" class="stack-list loading">Loading reports...</div>
+        </section>
+    </main>
+
+    <script src="js/app.js"></script>
+    <script>
+        const session = requireAuth(["owner"]);
+        let ownerServices = [];
+
+        if (session) {
+            document.getElementById("welcomeTitle").textContent = `${session.user.full_name || "Owner"}'s Vehicles`;
+            document.getElementById("appNav").innerHTML = appNav("dashboard");
+            loadOwnerDashboard();
+        }
+
+        async function loadOwnerDashboard() {
+            try {
+                const [vehicles, services, reports] = await Promise.all([
+                    apiFetch("/vehicles"),
+                    apiFetch("/services"),
+                    apiFetch("/reports")
+                ]);
+
+                document.getElementById("vehicleCount").textContent = vehicles.length;
+                document.getElementById("serviceCount").textContent = services.length;
+                document.getElementById("latestService").textContent = services[0] ? formatDate(services[0].service_date) : "None";
+                document.getElementById("activeReportCount").textContent = reports.filter((report) => Number(report.is_active) === 1 && !isExpired(report.expires_at)).length;
+
+                ownerServices = services;
+                renderVehicles(vehicles, services);
+                renderServices(services);
+                renderReports(reports);
+            } catch (error) {
+                document.getElementById("vehiclesContainer").innerHTML = `<div class="empty-state">${escapeHtml(error.message)}</div>`;
+                document.getElementById("servicesContainer").innerHTML = `<div class="empty-state">${escapeHtml(error.message)}</div>`;
+                document.getElementById("reportsContainer").innerHTML = `<div class="empty-state">${escapeHtml(error.message)}</div>`;
+            }
+        }
+
+        function renderVehicles(vehicles, services) {
+            const container = document.getElementById("vehiclesContainer");
+            const grouped = services.reduce((acc, service) => {
+                acc[service.vehicle_id] = acc[service.vehicle_id] || [];
+                acc[service.vehicle_id].push(service);
+                return acc;
+            }, {});
+
+            if (!vehicles.length) {
+                container.className = "empty-state";
+                container.innerHTML = `No vehicles yet. Add your first vehicle to start building a trusted service history. <a href="add-vehicle.html">Add vehicle</a>.`;
+                return;
+            }
+
+            container.className = "stack-list";
+            container.innerHTML = vehicles.map((vehicle) => {
+                const records = grouped[vehicle.vehicle_id] || [];
+                const lastService = records[0];
+
+                return `
+                <article class="record-card rich-card">
+                    <div>
+                        <h3>${escapeHtml(vehicle.make)} ${escapeHtml(vehicle.model)}</h3>
+                        <p>${escapeHtml(vehicle.registration_number)} · ${escapeHtml(vehicle.year_manufactured)} · ${records.length} records</p>
+                        <p class="muted">VIN ${escapeHtml(vehicle.vin_number)}</p>
+                        <div class="record-meta">
+                            ${verifiedBadge("Tracked")}
+                            <span class="pill pill-neutral">Last service: ${lastService ? formatDate(lastService.service_date) : "No service yet"}</span>
+                        </div>
+                    </div>
+                    <div class="button-row">
+                        <button class="btn btn-small" onclick="viewHistory(${vehicle.vehicle_id})">View History</button>
+                        <button class="btn btn-small btn-secondary" onclick="generateReport(${vehicle.vehicle_id})">Generate Report</button>
+                    </div>
+                </article>
+                `;
+            }).join("");
+        }
+
+        function renderServices(services) {
+            const container = document.getElementById("servicesContainer");
+
+            if (!services.length) {
+                container.className = "empty-state";
+                container.textContent = "No service records have been added for your vehicles yet.";
+                return;
+            }
+
+            container.className = "timeline";
+            container.innerHTML = services.slice(0, 6).map((service) => `
+                <article class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-card report-row">
+                        <div class="timeline-head">
+                            <h3>${escapeHtml(service.make)} ${escapeHtml(service.model)}</h3>
+                            <strong>${formatMoney(service.cost)}</strong>
+                        </div>
+                        <p>${escapeHtml(service.description)}</p>
+                        <p class="muted">${formatDate(service.service_date)} · ${Number(service.mileage).toLocaleString()} km · ${escapeHtml(service.centre_name || service.service_provider_name || "Service centre")}</p>
+                        <div class="record-meta">${verifiedBadge()}</div>
+                    </div>
+                </article>
+            `).join("");
+        }
+
+        function viewHistory(vehicleId) {
+            localStorage.setItem("selectedVehicleId", vehicleId);
+            window.location.href = "history.html";
+        }
+
+        function renderReports(reports) {
+            const container = document.getElementById("reportsContainer");
+
+            if (!reports.length) {
+                container.className = "empty-state";
+                container.textContent = "No public buyer reports yet. Generate one from a vehicle card.";
+                return;
+            }
+
+            container.className = "stack-list";
+            container.innerHTML = reports.map((report) => {
+                const reportUrl = `${window.location.origin}/report.html?code=${report.report_code}`;
+                return `
+                    <article class="record-card">
+                        <div>
+                            <h3>${escapeHtml(report.make)} ${escapeHtml(report.model)}</h3>
+                            <p>${escapeHtml(report.registration_number)} · Code: ${escapeHtml(report.report_code)}</p>
+                            <p class="muted">Expires ${formatDate(report.expires_at)}</p>
+                            <div class="record-meta">${reportStatusPill(report)}</div>
+                        </div>
+                        <div class="button-row">
+                            <button class="btn btn-small" onclick="copyReportLink('${reportUrl}')">Copy Link</button>
+                            ${report.is_active ? `<button class="btn btn-small btn-danger" onclick="deactivateReport(${report.report_id})">Deactivate</button>` : ""}
+                        </div>
+                    </article>
+                `;
+            }).join("");
+        }
+
+        async function generateReport(vehicleId) {
+            try {
+                const data = await apiFetch("/reports", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        vehicle_id: vehicleId,
+                        expires_in_days: 14
+                    })
+                });
+                await copyReportLink(`${window.location.origin}${data.report_url}`);
+                loadOwnerDashboard();
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        async function deactivateReport(reportId) {
+            try {
+                await apiFetch(`/reports/${reportId}/deactivate`, { method: "PATCH" });
+                loadOwnerDashboard();
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        async function copyReportLink(url) {
+            if (navigator.clipboard) {
+                await navigator.clipboard.writeText(url);
+                alert("Report link copied");
+                return;
+            }
+            window.prompt("Copy report link", url);
+        }
+    </script>
+</body>
+</html>

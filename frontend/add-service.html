@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Service Record - Vehicle Service System</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="app-page">
+    <header class="app-header">
+        <div>
+            <p class="eyebrow">Service Centre</p>
+            <h1>Add Service Record</h1>
+        </div>
+        <nav class="header-actions">
+            <a class="btn btn-ghost" href="dashboard.html">Back</a>
+            <button class="btn btn-ghost" onclick="logout()">Logout</button>
+        </nav>
+    </header>
+    <div id="appNav"></div>
+
+    <main class="form-page">
+        <section class="panel form-panel">
+            <div class="section-heading">
+                <p class="eyebrow">Service history</p>
+                <h2>Record completed work</h2>
+            </div>
+
+            <form id="addServiceForm" class="form-grid">
+                <label class="field span-2">
+                    <span>Vehicle</span>
+                    <select id="vehicle" required>
+                        <option value="">Loading vehicles...</option>
+                    </select>
+                </label>
+
+                <label class="field">
+                    <span>Service Date</span>
+                    <input type="date" id="serviceDate" required>
+                </label>
+
+                <label class="field">
+                    <span>Mileage (km)</span>
+                    <input type="number" id="mileage" min="0" placeholder="45000" required>
+                </label>
+
+                <label class="field span-2">
+                    <span>Description</span>
+                    <textarea id="description" placeholder="Oil change, inspection, brake check" required></textarea>
+                </label>
+
+                <label class="field">
+                    <span>Parts Replaced</span>
+                    <textarea id="parts" placeholder="Oil filter, brake pads"></textarea>
+                </label>
+
+                <label class="field">
+                    <span>Cost (KES)</span>
+                    <input type="number" id="cost" min="0" step="0.01" placeholder="8500" required>
+                </label>
+
+                <div class="form-actions span-2">
+                    <button type="submit" class="btn btn-primary">Save Service Record</button>
+                    <a class="btn btn-secondary" href="dashboard.html">Cancel</a>
+                </div>
+            </form>
+
+            <div class="message" id="message" hidden></div>
+        </section>
+    </main>
+
+    <script src="js/app.js"></script>
+    <script>
+        const session = requireAuth(["mechanic", "centre_admin", "admin"]);
+        const params = new URLSearchParams(window.location.search);
+        const preselectedVehicleId = params.get("vehicle_id");
+        const preselectedVehicleLabel = params.get("vehicle_label");
+
+        if (session && (session.user.role === "mechanic" || session.user.role === "centre_admin") && (session.user.status !== "approved" || session.user.centre_status !== "approved")) {
+            window.location.href = "mechanic-dashboard.html";
+        }
+
+        if (session) {
+            document.getElementById("appNav").innerHTML = appNav("add-service");
+            loadVehicles();
+            document.getElementById("serviceDate").value = new Date().toISOString().slice(0, 10);
+        }
+
+        async function loadVehicles() {
+            const select = document.getElementById("vehicle");
+
+            try {
+                const vehicles = await apiFetch("/vehicles");
+                select.innerHTML = '<option value="">Select a vehicle</option>';
+
+                vehicles.forEach((vehicle) => {
+                    const option = document.createElement("option");
+                    option.value = vehicle.vehicle_id;
+                    option.textContent = `${vehicle.make} ${vehicle.model} · ${vehicle.registration_number} · ${vehicle.owner_name || "Unknown owner"}`;
+                    select.appendChild(option);
+                });
+
+                if (preselectedVehicleId) {
+                    if (![...select.options].some((option) => option.value === preselectedVehicleId) && preselectedVehicleLabel) {
+                        const option = document.createElement("option");
+                        option.value = preselectedVehicleId;
+                        option.textContent = preselectedVehicleLabel;
+                        select.appendChild(option);
+                    }
+
+                    select.value = preselectedVehicleId;
+                }
+
+                if (!vehicles.length) {
+                    select.innerHTML = '<option value="">No vehicles available</option>';
+                }
+            } catch (error) {
+                select.innerHTML = '<option value="">Unable to load vehicles</option>';
+                showMessage("message", error.message, "error");
+            }
+        }
+
+        document.getElementById("addServiceForm").addEventListener("submit", async (event) => {
+            event.preventDefault();
+
+            try {
+                const data = await apiFetch("/services", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        vehicle_id: document.getElementById("vehicle").value,
+                        service_date: document.getElementById("serviceDate").value,
+                        mileage: document.getElementById("mileage").value,
+                        description: document.getElementById("description").value.trim(),
+                        parts_replaced: document.getElementById("parts").value.trim(),
+                        cost: document.getElementById("cost").value
+                    })
+                });
+
+                showMessage("message", data.message || "Service record added successfully");
+                setTimeout(() => {
+                    window.location.href = "dashboard.html";
+                }, 900);
+            } catch (error) {
+                showMessage("message", error.message, "error");
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Service History - Vehicle Service System</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="app-page">
+    <header class="app-header">
+        <div>
+            <p class="eyebrow">Service Timeline</p>
+            <h1>Vehicle History</h1>
+        </div>
+        <nav class="header-actions">
+            <a class="btn btn-ghost" href="dashboard.html">Back</a>
+            <button class="btn btn-ghost" onclick="logout()">Logout</button>
+        </nav>
+    </header>
+    <div id="appNav"></div>
+
+    <main class="app-shell narrow-shell">
+        <section class="panel" id="vehiclePanel">
+            <div class="loading">Loading vehicle...</div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-heading">
+                <div>
+                    <p class="eyebrow">From service_records</p>
+                    <h2>Service History</h2>
+                </div>
+            </div>
+            <div id="historyContainer" class="timeline loading">Loading service history...</div>
+        </section>
+    </main>
+
+    <script src="js/app.js"></script>
+    <script>
+        const session = requireAuth(["owner", "mechanic", "centre_admin", "admin"]);
+        const params = new URLSearchParams(window.location.search);
+        const vehicleId = params.get("vehicle_id") || localStorage.getItem("selectedVehicleId");
+
+        if (session) {
+            document.getElementById("appNav").innerHTML = appNav("history");
+            if (!vehicleId) {
+                document.getElementById("vehiclePanel").innerHTML = '<div class="empty-state">No vehicle selected.</div>';
+                document.getElementById("historyContainer").innerHTML = '<div class="empty-state">Choose a vehicle from your dashboard first.</div>';
+            } else {
+                loadHistory(vehicleId);
+            }
+        }
+
+        async function loadHistory(id) {
+            try {
+                const [vehicle, records] = await Promise.all([
+                    apiFetch(`/vehicles/${id}`),
+                    apiFetch(`/services/${id}`)
+                ]);
+
+                document.getElementById("vehiclePanel").innerHTML = `
+                    <div class="vehicle-summary">
+                        <div>
+                            <p class="eyebrow">${escapeHtml(vehicle.registration_number)}</p>
+                            <h2>${escapeHtml(vehicle.make)} ${escapeHtml(vehicle.model)}</h2>
+                            <p class="muted">VIN ${escapeHtml(vehicle.vin_number)} · ${escapeHtml(vehicle.year_manufactured)}</p>
+                        </div>
+                        <div class="summary-stat">
+                            <span>Owner</span>
+                            <strong>${escapeHtml(vehicle.owner_name || "You")}</strong>
+                        </div>
+                    </div>
+                `;
+
+                renderHistory(records);
+            } catch (error) {
+                document.getElementById("vehiclePanel").innerHTML = `<div class="empty-state">${escapeHtml(error.message)}</div>`;
+                document.getElementById("historyContainer").innerHTML = `<div class="empty-state">${escapeHtml(error.message)}</div>`;
+            }
+        }
+
+        function renderHistory(records) {
+            const container = document.getElementById("historyContainer");
+
+            if (!records.length) {
+                container.className = "empty-state";
+                container.textContent = "No service records have been added for this vehicle yet.";
+                return;
+            }
+
+            container.className = "timeline";
+            container.innerHTML = records.map((record) => `
+                <article class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-card">
+                        <div class="timeline-head">
+                            <h3>${formatDate(record.service_date)}</h3>
+                            <strong>${formatMoney(record.cost)}</strong>
+                        </div>
+                        <p>${escapeHtml(record.description)}</p>
+                        ${record.parts_replaced ? `<p class="muted">Parts: ${escapeHtml(record.parts_replaced)}</p>` : ""}
+                        <p class="muted">
+                            Mileage: ${Number(record.mileage).toLocaleString()} km ·
+                            Serviced at: ${escapeHtml(record.centre_name || record.service_provider_name || "Unknown centre")}
+                        </p>
+                    </div>
+                </article>
+            `).join("");
+        }
+    </script>
+</body>
+</html>

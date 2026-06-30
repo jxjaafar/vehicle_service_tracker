@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vehicle Report - Vehicle Service System</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="app-page">
+    <header class="app-header">
+        <div>
+            <p class="eyebrow">Buyer Report</p>
+            <h1>Vehicle Service History Report</h1>
+        </div>
+        <nav class="header-actions">
+            <a class="btn btn-ghost" href="landing.html">Home</a>
+            <a class="btn btn-ghost" href="login.html">System Login</a>
+        </nav>
+    </header>
+
+    <main class="app-shell narrow-shell">
+        <section class="panel">
+            <div class="section-heading">
+                <p class="eyebrow">Secure access</p>
+                <h2>Open a shared report</h2>
+            </div>
+
+            <form id="reportLookupForm" class="form-grid report-lookup">
+                <label class="field span-2">
+                    <span>Report Code</span>
+                    <input type="text" id="reportCode" placeholder="Enter report code from the seller" required>
+                </label>
+
+                <div class="form-actions span-2">
+                    <button type="submit" class="btn btn-primary">View Report</button>
+                </div>
+            </form>
+
+            <div class="message" id="message" hidden></div>
+        </section>
+
+        <section id="reportContainer" class="report-output" hidden></section>
+    </main>
+
+    <script src="js/app.js"></script>
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const initialCode = params.get("code");
+
+        if (initialCode) {
+            document.getElementById("reportCode").value = initialCode;
+            loadReport(initialCode);
+        }
+
+        document.getElementById("reportLookupForm").addEventListener("submit", (event) => {
+            event.preventDefault();
+            const code = document.getElementById("reportCode").value.trim();
+            if (code) {
+                window.history.replaceState(null, "", `report.html?code=${encodeURIComponent(code)}`);
+                loadReport(code);
+            }
+        });
+
+        async function loadReport(code) {
+            const container = document.getElementById("reportContainer");
+            container.hidden = false;
+            container.innerHTML = '<div class="panel loading">Loading report...</div>';
+            document.getElementById("message").hidden = true;
+
+            try {
+                const data = await apiFetch(`/reports/public/${encodeURIComponent(code)}`);
+                renderReport(data);
+            } catch (error) {
+                container.hidden = false;
+                container.innerHTML = `
+                    <section class="panel notice-panel">
+                        <p class="eyebrow">Report unavailable</p>
+                        <h2>This report is inactive, expired, or could not be found.</h2>
+                        <p class="muted">${escapeHtml(error.message)}</p>
+                    </section>
+                `;
+                showMessage("message", error.message, "error");
+            }
+        }
+
+        function renderReport(data) {
+            const { report, vehicle, service_records } = data;
+            const container = document.getElementById("reportContainer");
+            const latestMileage = service_records[0] ? Number(service_records[0].mileage).toLocaleString() : "No records";
+
+            container.innerHTML = `
+                <section class="panel report-hero report-cover">
+                    <div>
+                        <p class="eyebrow">Verified shared report</p>
+                        <h2>${escapeHtml(vehicle.make)} ${escapeHtml(vehicle.model)}</h2>
+                        <p class="muted">${escapeHtml(vehicle.registration_number)} · VIN ${escapeHtml(vehicle.vin_number)} · ${escapeHtml(vehicle.year_manufactured)}</p>
+                        <div class="record-meta">${statusPill("active")} ${verifiedBadge("Owner shared")}</div>
+                    </div>
+                    <div class="report-meta">
+                        <span>Report Code</span>
+                        <strong>${escapeHtml(report.report_code)}</strong>
+                    </div>
+                </section>
+
+                <section class="report-detail-grid">
+                    <article class="detail-tile"><span>Make / Model</span><strong>${escapeHtml(vehicle.make)} ${escapeHtml(vehicle.model)}</strong></article>
+                    <article class="detail-tile"><span>Registration</span><strong>${escapeHtml(vehicle.registration_number)}</strong></article>
+                    <article class="detail-tile"><span>VIN</span><strong>${escapeHtml(vehicle.vin_number)}</strong></article>
+                    <article class="detail-tile"><span>Report Status</span><strong>Active</strong></article>
+                    <article class="detail-tile"><span>Generated</span><strong>${formatDate(report.generated_at)}</strong></article>
+                    <article class="detail-tile"><span>Expires</span><strong>${formatDate(report.expires_at)}</strong></article>
+                    <article class="detail-tile"><span>Latest Service</span><strong>${service_records[0] ? formatDate(service_records[0].service_date) : "No records"}</strong></article>
+                    <article class="detail-tile"><span>Latest Mileage</span><strong>${latestMileage}</strong></article>
+                </section>
+
+                <section class="metric-grid report-metrics">
+                    <article class="metric-card">
+                        <span>Service Records</span>
+                        <strong>${service_records.length}</strong>
+                    </article>
+                    <article class="metric-card">
+                        <span>Latest Mileage</span>
+                        <strong>${latestMileage}</strong>
+                    </article>
+                    <article class="metric-card">
+                        <span>Expires</span>
+                        <strong>${formatDate(report.expires_at)}</strong>
+                    </article>
+                </section>
+
+                <section class="panel">
+                    <div class="panel-heading">
+                        <div>
+                            <p class="eyebrow">Service timeline</p>
+                            <h2>Recorded History</h2>
+                        </div>
+                    </div>
+                    ${renderPublicTimeline(service_records)}
+                </section>
+
+                <p class="disclaimer">This report is shared by the vehicle owner and only shows records stored in the system.</p>
+            `;
+        }
+
+        function renderPublicTimeline(records) {
+            if (!records.length) {
+                return '<div class="empty-state">No service records have been shared for this vehicle yet.</div>';
+            }
+
+            return `
+                <div class="timeline">
+                    ${records.map((record) => `
+                        <article class="timeline-item">
+                            <div class="timeline-dot"></div>
+                            <div class="timeline-card report-row">
+                                <div class="timeline-head">
+                                    <h3>${formatDate(record.service_date)}</h3>
+                                    <strong>${formatMoney(record.cost)}</strong>
+                                </div>
+                                <p>${escapeHtml(record.description)}</p>
+                                ${record.parts_replaced ? `<p class="muted">Parts: ${escapeHtml(record.parts_replaced)}</p>` : ""}
+                                <p class="muted">Mileage: ${Number(record.mileage).toLocaleString()} km · Serviced at: ${escapeHtml(record.centre_name || record.service_provider_name || "Unknown centre")}</p>
+                                <div class="record-meta">${verifiedBadge()}</div>
+                            </div>
+                        </article>
+                    `).join("")}
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vehicle Service System</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="landing-page">
+    <header class="site-nav">
+        <a class="brand-mark" href="landing.html">
+            <span class="brand-icon">V</span>
+            <span>Vehicle Service</span>
+        </a>
+        <button class="nav-toggle" type="button" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+        <nav class="nav-links" id="navLinks">
+            <a href="#how-it-works">How it works</a>
+            <a href="#owners">For owners</a>
+            <a href="#centres">For centres</a>
+            <a href="#reports">Reports</a>
+            <a href="#about">About</a>
+            <a href="#contact">Contact</a>
+            <a class="btn btn-ghost" href="login.html">Login</a>
+            <a class="btn btn-primary" href="register.html">Register</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="landing-hero">
+            <div class="hero-overlay"></div>
+            <div class="landing-hero-content">
+                <p class="eyebrow">Verified vehicle maintenance records</p>
+                <h1>Verify a vehicle's service history before you buy, sell, or service it.</h1>
+                <p class="hero-copy">A realistic vehicle history verification platform for maintenance records, approved service centres, owner-controlled reports, and confident buyer decisions.</p>
+                <form class="hero-search" id="heroReportSearch">
+                    <input type="text" id="heroLookupInput" placeholder="Enter registration number or report code" required>
+                    <button class="btn btn-primary" type="submit">Check vehicle report</button>
+                </form>
+                <div class="landing-kicker">
+                    <span>Verified service timeline</span>
+                    <span>Approved centres</span>
+                    <span>Public buyer access</span>
+                </div>
+                <div class="button-row">
+                    <a class="btn btn-primary" href="register.html">Register your account</a>
+                    <a class="btn btn-secondary" href="report.html">Check a shared report</a>
+                </div>
+            </div>
+        </section>
+
+        <section class="landing-band trust-strip">
+            <div>
+                <strong>Verified service records</strong>
+                <span>Each record includes service details, mileage, costs, and the centre connected to the work.</span>
+            </div>
+            <div>
+                <strong>Approved service centres</strong>
+                <span>Main admin reviews centres before they can add verified vehicle maintenance records.</span>
+            </div>
+            <div>
+                <strong>Owner-controlled report links</strong>
+                <span>Owners can generate, copy, expire, and deactivate public buyer reports.</span>
+            </div>
+        </section>
+
+        <section class="landing-section" id="how-it-works">
+            <div class="section-heading">
+                <p class="eyebrow">How it works</p>
+                <h2>A clean workflow from ownership to buyer verification</h2>
+            </div>
+            <div class="process-grid">
+                <article class="process-card">
+                    <span>01</span>
+                    <h3>Owners add vehicles</h3>
+                    <p>Vehicle owners create an account, register their cars, and track service history from their dashboard.</p>
+                </article>
+                <article class="process-card">
+                    <span>02</span>
+                    <h3>Service centre records maintenance</h3>
+                    <p>Approved centres add service work, mileage, parts, costs, and verified maintenance notes.</p>
+                </article>
+                <article class="process-card">
+                    <span>03</span>
+                    <h3>Owner shares a report</h3>
+                    <p>The owner creates a public report link that exposes only the stored vehicle history.</p>
+                </article>
+                <article class="process-card">
+                    <span>04</span>
+                    <h3>Buyer views confidence data</h3>
+                    <p>Buyers inspect vehicle identity, service dates, mileage, centres, and report status before deciding.</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="landing-section feature-split" id="reports">
+            <div>
+                <p class="eyebrow">Report preview</p>
+                <h2>A buyer-friendly report surface that reads like a real verification product.</h2>
+                <p>Report links give public users a structured view of vehicle identity, latest service, mileage, service centre, and verified maintenance events.</p>
+            </div>
+            <div class="preview-card">
+                <div class="record-meta">
+                    <span class="pill pill-verified">Verified</span>
+                    <span class="pill pill-success">Active</span>
+                </div>
+                <h3>Subaru Forester 2019</h3>
+                <div class="preview-row"><span>Registration</span><strong>KDA 123A</strong></div>
+                <div class="preview-row"><span>Last service</span><strong>Jun 14, 2026</strong></div>
+                <div class="preview-row"><span>Mileage</span><strong>84,200 km</strong></div>
+                <div class="preview-row"><span>Service centre</span><strong>AutoCare Nairobi</strong></div>
+            </div>
+        </section>
+
+        <section class="landing-section" id="owners">
+            <div class="section-heading">
+                <p class="eyebrow">Built for every workflow</p>
+                <h2>Owners, centres, buyers, and admins each get a clear path.</h2>
+            </div>
+            <div class="audience-grid">
+                <article class="audience-card">
+                    <h3>For Vehicle Owners</h3>
+                    <p>Register vehicles, monitor maintenance history, and generate controlled report links when selling or verifying a car.</p>
+                </article>
+                <article class="audience-card" id="centres">
+                    <h3>For Service Providers</h3>
+                    <p>Work under an approved centre, search by registration, and add verified service records without seeing every car by default.</p>
+                </article>
+                <article class="audience-card">
+                    <h3>For Buyers</h3>
+                    <p>Open a shared report without logging in and inspect the vehicle timeline before committing to a purchase.</p>
+                </article>
+                <article class="audience-card">
+                    <h3>For Admins</h3>
+                    <p>Approve centres, monitor users, review vehicles, and keep the platform data clean and trustworthy.</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="landing-section feature-split">
+            <div>
+                <p class="eyebrow">For service centres</p>
+                <h2>Run service history as a centre, not a single mechanic account.</h2>
+                <p>Each record belongs to the approved centre, so the history remains tied to the business even when staff changes. Centre admins can view vehicles serviced at their centre and search outside vehicles by registration number.</p>
+            </div>
+            <div class="feature-panel">
+                <div class="mini-record">
+                    <span>Centre</span>
+                    <strong>AutoCare Nairobi</strong>
+                </div>
+                <div class="mini-record">
+                    <span>Vehicle</span>
+                    <strong>KDA 123A</strong>
+                </div>
+                <div class="mini-record">
+                    <span>Recorded by</span>
+                    <strong>Centre Admin</strong>
+                </div>
+            </div>
+        </section>
+
+        <section class="landing-section" id="about">
+            <div class="section-heading">
+                <p class="eyebrow">About the system</p>
+                <h2>A maintenance-first verification layer for vehicle ownership.</h2>
+                <p class="hero-copy" style="color: var(--muted);">The system keeps service history organized around owners, vehicles, approved centres, and public reports. It is designed to reduce uncertainty when servicing, selling, or buying a vehicle by making maintenance records easier to store and verify.</p>
+            </div>
+            <div class="info-grid">
+                <article>
+                    <h3>Public buyer access</h3>
+                    <p>Buyers can open a report link or enter a report code without creating an account.</p>
+                </article>
+                <article>
+                    <h3>Centre accountability</h3>
+                    <p>Service records identify the provider or centre behind each maintenance event.</p>
+                </article>
+                <article>
+                    <h3>Owner control</h3>
+                    <p>Owners decide which reports to generate and can deactivate shared access.</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="landing-section" id="contact">
+            <div class="section-heading">
+                <p class="eyebrow">Contact</p>
+                <h2>Questions about verification, reports, or centre onboarding?</h2>
+            </div>
+            <div class="contact-grid">
+                <div class="contact-list">
+                    <div class="contact-item"><strong>Email</strong><p class="muted">support@vehicleservice.local</p></div>
+                    <div class="contact-item"><strong>Phone</strong><p class="muted">+254 700 000 000</p></div>
+                    <div class="contact-item"><strong>Location</strong><p class="muted">Nairobi, Kenya</p></div>
+                </div>
+                <form class="panel form-grid" onsubmit="event.preventDefault(); alert('Thanks. This demo contact form is ready for backend wiring.');">
+                    <label class="field">
+                        <span>Name</span>
+                        <input type="text" placeholder="Your name" required>
+                    </label>
+                    <label class="field">
+                        <span>Email</span>
+                        <input type="email" placeholder="you@example.com" required>
+                    </label>
+                    <label class="field span-2">
+                        <span>Message</span>
+                        <textarea placeholder="How can we help?" required></textarea>
+                    </label>
+                    <div class="form-actions span-2">
+                        <button class="btn btn-primary" type="submit">Send message</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+    </main>
+
+    <footer class="landing-footer">
+        <span>Vehicle Service System</span>
+        <div>
+            <a href="login.html">Login</a>
+            <a href="register.html">Register</a>
+            <a href="report.html">Open report</a>
+        </div>
+    </footer>
+
+    <script>
+        const toggle = document.querySelector(".nav-toggle");
+        const navLinks = document.getElementById("navLinks");
+
+        toggle.addEventListener("click", () => {
+            const isOpen = navLinks.classList.toggle("open");
+            toggle.setAttribute("aria-expanded", String(isOpen));
+        });
+
+        document.getElementById("heroReportSearch").addEventListener("submit", (event) => {
+            event.preventDefault();
+            const value = document.getElementById("heroLookupInput").value.trim();
+            if (value) {
+                window.location.href = `report.html?code=${encodeURIComponent(value)}`;
+            }
+        });
+    </script>
+</body>
+</html>
